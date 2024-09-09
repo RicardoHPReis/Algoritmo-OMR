@@ -1,7 +1,23 @@
 import cv2
 import numpy as np
 import os
+import time as t
 
+
+NUM_QUESTOES = 50
+ALTERNATIVAS = 5
+COLUNAS = 3
+ALTURA_IMAGEM = 1200
+LARGURA_IMAGEM = 800
+TAMANHO_GAUSS = (5,5)
+SIGMA_GAUSS = 1
+
+
+def titulo() -> None:
+    print("--------------------")
+    print("         OMR")
+    print("--------------------\n")
+    
 
 def processar_imagem(imagem):
     # tranforma a imagem em escala de cinza
@@ -37,37 +53,28 @@ def ordenaPontosVertice(pontos):
 # da folha de respostas.
 # Esta funcao recebe como entrada os contornos da funcao do OpenCV
 def localizaRetangulos(contornos):
-    retangulo = []
-    area_maxima = 0
+    retangulos = []
+
     for i in contornos:
-        area = cv2.contourArea(i)
+        if cv2.contourArea(i) > 40: # verifica se a area é relevante (se nao se trata de retangulos pequenos) 
+            perimetro = cv2.arcLength(i, True) # calcula o perimetro do contorno
+            contorno_aproximado = cv2.approxPolyDP(i, 0.02 * perimetro, True) #aproxima o contorno usando a função aprroxPolyDP
+            # que reduz o número de pontos do contorno para simplificar sua forma. O parâmetro 0.02*perimetro é a precisão da aproximação
 
-        # se a area for maior que 50
-        if area > 50:
+            # Verifica se o contorno aproximado tem 4 pontos. É uma indicação que é um quadrilátero e pode ser um retângulo
+            if len(contorno_aproximado) == 4:
+                retangulos.append(i) # adiciona à lista de retângulos
 
-            # calcula o perimetro
-            perimetro = cv2.arcLength(i, True)
+    retangulos = sorted(retangulos, key=cv2.contourArea, reverse=True)     # Ordena retângulos pela área em ordem decrescente, contornos com maior área aparecem primeiro
 
-            # retorna o contorno desse perimetro
-            contorno_perimetro = cv2.approxPolyDP(i, 0.02 * perimetro, True)
-            if len(contorno_perimetro) == 4:
-                retangulo.append(i)
-
-    retangulo = sorted(retangulo, key=cv2.contourArea, reverse=True)
-
-    return retangulo
+    return retangulos # Retorna a lista de contornos que foram identificados como retângulos.
 
 
-# localiza os vertices dos retangulos para realizar o recorte de área
-# com as questões
-def localizaVertices(cont):
-    # calcula o perimetro da figura
-    # true indica que é o um contorno fechado
-    perimetro = cv2.arcLength(cont, True)
-
-    # realiza uma aproximacao da linha de contorno
-    linha = cv2.approxPolyDP(cont, 0.02 * perimetro, True)
-    return linha
+# localiza os vertices dos retangulos para realizar o recorte de área com as questões
+def localizaVertices(contorno):
+    perimetro = cv2.arcLength(contorno, True)     # calcula o perimetro da figura     # true indica que é o um contorno fechado
+    vertices_aproximados = cv2.approxPolyDP(contorno, 0.02 * perimetro, True)     # realiza uma aproximacao da linha de contorno
+    return vertices_aproximados # retorna um array de pontos que representam os vértices do contorno aproximado
 
 
 # Quebra o bloco de questoes em 25 linha (1 linha por questao)
@@ -169,8 +176,7 @@ def geraVetorResposta(imagem):
     imagem_processada = processar_imagem(imagem)
 
     # procura os contornos na imagem
-    contornos, hierarquia = cv2.findContours(
-        imagem_processada, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contornos, hierarquia = cv2.findContours(imagem_processada, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     # procura retangulo
     retangulos = localizaRetangulos(contornos)
@@ -190,81 +196,76 @@ def geraVetorResposta(imagem):
     print("Respostas:", respostas)
     return respostas
 
+
 def calculaNota(gabarito, respostas):
-    if len(gabarito) != len(respostas):
-        print("Os vetores possuem tamanhos diferentes")
-        return 300
-
     qtd_corretas = 0
-    qtd_erradas = 0
-
-    qtd_questoes_validas_gabarito = 50
-    nulas = []
-    marcas_duplas = []
     index = 1
 
     for i in range(0, 50):
-        # se a resposta for igual a do gabarito
-        if respostas[i] == gabarito[i] and gabarito[i] != -1:
+        if respostas[i] == gabarito[i]:  # se a resposta for igual a do gabarito
             qtd_corretas += 1
-            corretas.append(index)
-
-        # se o gabarito nao estiver assinalado naquela i
-        elif respostas[i] != gabarito[i]:
-            if gabarito[i] == -1:
-                qtd_questoes_validas_gabarito -= 1
-                nulas.append(index)
-
-            elif gabarito[i] == -2:
-                qtd_questoes_validas_gabarito -= 1
-                nulas.append(index)
-
-            elif respostas[i] == -2:
-                qtd_erradas += 1
-                marcas_duplas.append(index)
-
-            else:
-                qtd_erradas += 1
-                erradas.append(index)
-
         index += 1
-        
-    # calcula a nota do aluno
-    nota = (qtd_corretas/qtd_questoes_validas_gabarito) * 100
 
-    return nota, qtd_corretas, qtd_erradas
+    nota = qtd_corretas/5
+
+    return nota, qtd_corretas
+
+
+def escolher_imagem():
+    imagem_aluno = ""
+    imagem_gabarito = ""
+    
+    arquivos_imagens = os.listdir("./Images")
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        titulo()
+        print('Arquivos disponíveis:')
+        for i, arquivo in enumerate(arquivos_imagens):
+            print(f"{i+1}) {arquivo}")
+
+        num_imagem_aluno = int(input("\nDigite o número da imagem para corrigir: "))
+                
+        if isinstance(num_imagem_aluno, int) and (num_imagem_aluno <= len(arquivos_imagens) and num_imagem_aluno > 0):
+            caminho_aluno = os.path.join("./Images", arquivos_imagens[num_imagem_aluno-1])
+            break
+        else:
+            print('A escolha precisa estar nas opções acima!')
+            t.sleep(2)
+                        
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        titulo()
+        print('Arquivos disponíveis:')
+        for i, arquivo in enumerate(arquivos_imagens):
+            print(f"{i+1}) {arquivo}")
+
+        num_imagem_gabarito = int(input("\nDigite o número da imagem para o gabarito: "))
+                
+        if isinstance(num_imagem_gabarito, int) and (num_imagem_gabarito <= len(arquivos_imagens) and num_imagem_gabarito > 0):
+            caminho_gabarito = os.path.join("./Images", arquivos_imagens[num_imagem_gabarito-1])
+            break
+        else:
+            print('A escolha precisa estar nas opções acima!')
+            t.sleep(2)
+    
+    imagem_aluno = cv2.imread(caminho_aluno)
+    imagem_gabarito = cv2.imread(caminho_gabarito)
+    #cv2.imshow("Prova ALuno", imagem_aluno)
+    #cv2.waitKey(0)
+    return imagem_aluno, imagem_gabarito
 
 
 def main():
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print("--------------------")
-    print("         OMR")
-    print("--------------------\n")        
-    nome_arquivo = input("Escolha uma opção: ")
-    img = cv2.imread(os.path.join("./img", nome_arquivo))
-    
-    path_gabarito = "img01.jpg"
-    path_aluno = "img04.jpg"
-    
     # carrega imagem
-    imagem_gabarito = cv2.imread(path_gabarito)
-    imagem_aluno = cv2.imread(path_aluno)
-    
+    imagem_gabarito, imagem_aluno = escolher_imagem()
+
     # processa a imagem e transforma em um vetor
     gabarito = geraVetorResposta(imagem_gabarito)
     aluno = geraVetorResposta(imagem_aluno)
-    
-    # calcula a nota, numero de acertos, erros, questoes acertadas, questoes erradas e questoes nulas
-    nota, acertos, erros, corretas, erradas, nulas, duplas = calculaNota(
-        gabarito, aluno)
-    
-    
-    print("A nota foi: ", nota)
-    print("Você errou", erros, " questões e acertou ", acertos, "questoes")
-    print("As questões erradas foram: ", erradas)
-    print("As questões corretas foram: ", corretas, "sendo a(s) questão(ões)",
-          duplas, "por possuir duas alternativas assinaladas")
-    print("A prova teve as seguintes questões anuladas: ", nulas)
+
+    # calcula a nota, numero de acertos
+    nota, acertos = calculaNota(gabarito, aluno)
+    print("Você acertou", acertos, "/", NUM_QUESTOES, "e sua nota foi :", nota)
 
 if __name__ == '__main__':
     main()
