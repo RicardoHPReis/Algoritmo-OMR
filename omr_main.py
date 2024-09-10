@@ -7,7 +7,7 @@ import time as t
 NUM_QUESTOES = 50
 NUM_ALTERNATIVAS = 5
 ALTERNATIVAS = {"N/A":-2, "NULL":-1, "A":0, "B":1, "C":2, "D":3, "E":4}
-DISTRIBUICAO_QUESTOES = [25,25]
+DISTRIBUICAO_QUESTOES = [25, 25]
 ALTURA_IMAGEM = 1200
 LARGURA_IMAGEM = 800
 TAMANHO_GAUSS = (5,5)
@@ -124,10 +124,10 @@ def ordenar_pontos_vertices(pontos:cv2.Mat) -> cv2.Mat:
 def dividir_coluna_por_questao(imagem:cv2.Mat, num_questoes_coluna:int) -> list:
     questoes = []
 
-    # quebra as questoes em 25 linhas
+    # quebra as questoes em n linhas
     linhas = np.vsplit(imagem, num_questoes_coluna)
 
-    # quebra cada uma das 25 linhas em 5 colunas(5 alternativas)
+    # quebra cada uma das n linhas em m colunas(Num de alternativas)
     for l in linhas:
         colunas = np.hsplit(l, NUM_ALTERNATIVAS)
         for alternativa in colunas:
@@ -224,7 +224,7 @@ def gerar_resposta(imagem:cv2.Mat) -> list:
 def calcular_nota(gabarito:list, respostas:list) -> tuple[float, int]:
     qtd_corretas = 0
 
-    for i in range(0, 50):
+    for i in range(0, NUM_QUESTOES):
         if respostas[i] == gabarito[i]:             # se a resposta for igual a do gabarito
             qtd_corretas += 1
 

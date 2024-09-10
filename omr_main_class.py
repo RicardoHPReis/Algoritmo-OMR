@@ -5,7 +5,7 @@ import time as t
 
 
 class Imagem_OMR():
-    def __init__(self):
+    def __init__(self, eh_gabarito = False):
         self.__NUM_QUESTOES = 50
         self.__NUM_ALTERNATIVAS = 5
         self.__ALTERNATIVAS = {"N/A":-2, "NULL":-1, "A":0, "B":1, "C":2, "D":3, "E":4}
@@ -15,10 +15,20 @@ class Imagem_OMR():
         self.__TAMANHO_GAUSS = (5,5)
         self.__SIGMA_GAUSS = 1
         
+        self.__caminho = None
+        self.__imagem = None
+        self.__imagem_formatada = None
+        
         self.__respostas = []
         self.__acertos = 0
         self.__nota = 0
-        self.__gabarito = False
+        self.__gabarito = eh_gabarito
+        
+        # carrega imagem
+        self.escolher_imagem()
+
+        # processa a imagem e transforma em um vetor
+        self.gerar_resposta()
     
     
     def __del__(self):
@@ -35,10 +45,7 @@ class Imagem_OMR():
         print("--------------------\n")
 
 
-    def escolher_imagem(self) -> tuple[cv2.Mat, cv2.Mat]:
-        imagem_aluno = ""
-        imagem_gabarito = ""
-        
+    def escolher_imagem(self) -> None:
         arquivos_imagens = os.listdir("./Images")
         while True:
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -47,49 +54,30 @@ class Imagem_OMR():
             for i, arquivo in enumerate(arquivos_imagens):
                 print(f"{i+1}) {arquivo}")
 
-            num_imagem_aluno = int(input("\nDigite o número da imagem para corrigir: "))
-                    
-            if isinstance(num_imagem_aluno, int) and (num_imagem_aluno <= len(arquivos_imagens) and num_imagem_aluno > 0):
-                caminho_aluno = os.path.join("./Images", arquivos_imagens[num_imagem_aluno-1])
-                break
+            if self.__gabarito:
+                num_imagem = int(input("\nDigite o número da imagem para ser o gabarito: "))
             else:
-                print('A escolha precisa estar nas opções acima!')
-                t.sleep(2)
-                            
-        while True:
-            os.system('cls' if os.name == 'nt' else 'clear')
-            self.titulo()
-            print('Arquivos disponíveis:')
-            for i, arquivo in enumerate(arquivos_imagens):
-                print(f"{i+1}) {arquivo}")
-
-            num_imagem_gabarito = int(input("\nDigite o número da imagem para o gabarito: "))
+                num_imagem = int(input("\nDigite o número da imagem para corrigir: "))
                     
-            if isinstance(num_imagem_gabarito, int) and (num_imagem_gabarito <= len(arquivos_imagens) and num_imagem_gabarito > 0):
-                caminho_gabarito = os.path.join("./Images", arquivos_imagens[num_imagem_gabarito-1])
+            if isinstance(num_imagem, int) and (num_imagem <= len(arquivos_imagens) and num_imagem > 0):
+                self.__caminho = os.path.join("./Images", arquivos_imagens[num_imagem-1])
                 break
             else:
                 print('A escolha precisa estar nas opções acima!')
                 t.sleep(2)
         
-        imagem_aluno = cv2.imread(caminho_aluno)
-        imagem_gabarito = cv2.imread(caminho_gabarito)
-        #cv2.imshow("Prova ALuno", imagem_aluno)
-        #cv2.waitKey(0)
-        return imagem_aluno, imagem_gabarito
+        self.__imagem = cv2.imread(self.__caminho)
 
 
-    def processar_imagem(self, imagem_original:cv2.Mat) -> cv2.Mat:
+    def processar_imagem(self) -> None:
         # tranforma a imagem em escala de cinza
-        imagem_preto_branco = cv2.cvtColor(imagem_original, cv2.COLOR_BGR2GRAY)
+        imagem_preto_branco = cv2.cvtColor(self.__imagem, cv2.COLOR_BGR2GRAY)
         
         # aplica gaussian blur para reduzir ruido
         imagem_sem_ruido = cv2.GaussianBlur(imagem_preto_branco, self.__TAMANHO_GAUSS, self.__SIGMA_GAUSS)
         
         # detecao de contorno com algoritmo de Canny
-        imagem_canny = cv2.Canny(imagem_sem_ruido, 10, 50)
-        
-        return imagem_canny
+        self.__imagem_formatada = cv2.Canny(imagem_sem_ruido, 10, 50)
 
 
     # Localiza o retangulo que contem 25 questoes conforme o modelo
@@ -217,56 +205,51 @@ class Imagem_OMR():
 
 
     # processa a imagem e faz a leitura das alternativas salvando em um vetor
-    def gerar_resposta(self, imagem:cv2.Mat) -> list:
-        imagem = cv2.resize(imagem, (self.__LARGURA_IMAGEM, self.__ALTURA_IMAGEM))
-        imagem_processada = self.processar_imagem(imagem)
+    def gerar_resposta(self) -> None:
+        self.__imagem = cv2.resize(self.__imagem, (self.__LARGURA_IMAGEM, self.__ALTURA_IMAGEM))
+        self.processar_imagem()
 
         # procura os contornos na imagem
-        contornos, hierarquia = cv2.findContours(imagem_processada, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contornos, hierarquia = cv2.findContours(self.__imagem_formatada, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         # procura retangulo
         retangulos = self.localizar_retangulos(contornos)
 
-        respostas = []
         for i in range(0, len(self.__DISTRIBUICAO_QUESTOES)):
             retangulo_coluna = self.localizar_vertices(retangulos[i])
-            questoes_coluna = self.processar_retantagulo(retangulo_coluna, imagem, self.__DISTRIBUICAO_QUESTOES[i])
-            respostas += self.processar_questoes(questoes_coluna)
-
-        return respostas
+            questoes_coluna = self.processar_retantagulo(retangulo_coluna, self.__imagem, self.__DISTRIBUICAO_QUESTOES[i])
+            self.__respostas += self.processar_questoes(questoes_coluna)
 
 
-    def calcular_nota(self, gabarito:list, respostas:list) -> tuple[float, int]:
-        qtd_corretas = 0
 
-        for i in range(0, 50):
-            if respostas[i] == gabarito[i]:             # se a resposta for igual a do gabarito
-                qtd_corretas += 1
+class Respostas():
+    def __init__(self, gabarito:Imagem_OMR, aluno:Imagem_OMR):
+        self.__gabarito = gabarito
+        self.__aluno = aluno
+    
+    
+    def __del__(self):
+        self.__gabarito.__del__()
+        self.__aluno.__del__()
+        #os.system('cls' if os.name == 'nt' else 'clear')
+    
+    
+    def calcular_nota(self, gabarito:Imagem_OMR, aluno:Imagem_OMR) -> None:
+        for i in range(0, gabarito.__NUM_QUESTOES):
+            if aluno.__respostas[i] == gabarito.__respostas[i]:             # se a resposta for igual a do gabarito
+                aluno.__acertos += 1
 
-        nota = round((float(qtd_corretas)/self.__NUM_QUESTOES)*10, 1)
-
-        return nota, qtd_corretas
+        aluno.__nota = round((float(aluno.__acertos)/gabarito.__NUM_QUESTOES)*10, 1)
 
 
     def main(self) -> None:
-        # carrega imagem
-        imagem_gabarito, imagem_aluno = self.escolher_imagem()
-
-        # processa a imagem e transforma em um vetor
-        gabarito = self.gerar_resposta(imagem_gabarito)
-        aluno = self.gerar_resposta(imagem_aluno)
-
-        os.system('cls' if os.name == 'nt' else 'clear')
-        self.titulo()
-        print("Gabarito:", gabarito)
-        print("Respostas:", aluno)
-        
         # calcula a nota, numero de acertos
-        nota, acertos = self.calcular_nota(gabarito, aluno)
-        print("Você acertou", acertos, "/", self.__NUM_QUESTOES, "e sua nota foi :", nota)
+        self.calcular_nota(self.__gabarito, self.__aluno)
+        print("Você acertou", self.__aluno.__acertos, "/", self.__gabarito.__NUM_QUESTOES, "e sua nota foi :", self.__aluno.__nota)
 
 
 if __name__ == '__main__':
-    imagem_OMR = Imagem_OMR()
-    imagem_OMR = Imagem_OMR()
-    imagem_OMR.main()
+    gabarito = Imagem_OMR(True)
+    aluno = Imagem_OMR(False)
+    omr = Respostas(gabarito, aluno)
+    omr.main()
