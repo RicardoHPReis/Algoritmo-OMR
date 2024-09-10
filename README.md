@@ -1,2 +1,3 @@
 # Algoritmo-OMR
-Trabalho de Processamento Digital de Imagens feito em Python - 5°Período - UTFPR
+*Em Português:* Este trabalho foi feito em Python3 em conjunto com Maria Gabriela Policarpo na qual foi necessário criar um algoritmo OMR que seja capaz de corrigir uma prova com base em um gabarito.\
+Esse trabalho pertence à matéria de Processamento Digital de Imagens e foi provido pelo professores Gustavo Borba e Humberto Gamba da UTFPR (Universidade Tecnológica Federal do Paraná).\
