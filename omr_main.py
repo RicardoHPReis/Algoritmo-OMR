@@ -59,7 +59,7 @@ def escolher_imagem() -> tuple[cv2.Mat, cv2.Mat]:
     
     imagem_aluno = cv2.imread(caminho_aluno)
     imagem_gabarito = cv2.imread(caminho_gabarito)
-    return imagem_aluno, imagem_gabarito
+    return imagem_gabarito, imagem_aluno
 
 
 def processar_imagem(imagem_original:cv2.Mat) -> cv2.Mat:
