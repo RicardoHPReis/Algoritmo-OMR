@@ -109,7 +109,6 @@ def dividir_coluna_por_questao(imagem:cv2.Mat, num_questoes_coluna:int) -> list:
     questoes = []
 
     linhas = np.vsplit(imagem, num_questoes_coluna)
-
     for l in linhas:
         colunas = np.hsplit(l, NUM_ALTERNATIVAS)
         for alternativa in colunas:
@@ -128,7 +127,8 @@ def processar_retangulo(retangulo:cv2.Mat, imagem_original:cv2.Mat, num_questoes
         retangulo_warp = cv2.warpPerspective(imagem_original, matriz, (LARGURA_IMAGEM, ALTURA_IMAGEM))
         retangulo_warp_gray = cv2.cvtColor(retangulo_warp, cv2.COLOR_BGR2GRAY)
         retangulo_thresh = cv2.threshold(retangulo_warp_gray, 150, 255, cv2.THRESH_BINARY_INV)[1]
-        questoes = dividir_coluna_por_questao(retangulo_thresh, num_questoes_coluna)
+        retangulo_bw = cv2.erode(retangulo_thresh, np.ones((7, 7), np.uint8))
+        questoes = dividir_coluna_por_questao(retangulo_bw, num_questoes_coluna)
         return questoes
     
 
@@ -149,17 +149,16 @@ def processar_questoes(retangulo:list) -> list:
     respostas = []
     for x in range(0, 25):
         aux = pixels[x]
-        limite_minimo = np.amin(aux) * 1.5
+        limite_minimo = np.amin(aux) * 1.2
         if(np.amax(aux) > limite_minimo):
             alternativa_assinalada = np.where(aux == np.amax(aux))
             aux.sort()
-            if((aux[3]/np.amax(aux)) > 0.8):
+            if((aux[3]/np.amax(aux)) > 0.9):
                 alternativa_assinalada[0][0] = -2
         else:
             alternativa_assinalada[0][0] = -1
 
         respostas.append(alternativa_assinalada[0][0])
-
     return respostas
 
 
@@ -169,7 +168,6 @@ def gerar_resposta(imagem:cv2.Mat) -> list:
 
     contornos, hierarquia = cv2.findContours(imagem_processada, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     retangulos = localizar_retangulos(contornos)
-
     respostas = []
     for i in range(0, len(DISTRIBUICAO_QUESTOES)):
         retangulo_coluna = localizar_vertices(retangulos[i])
